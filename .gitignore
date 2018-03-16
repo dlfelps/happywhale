@@ -4,3 +4,5 @@
 # But not these files...
 !.gitignore
 !test_manual.py
+!tail.jpg
+!tail.npy
