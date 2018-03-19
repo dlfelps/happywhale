@@ -1,6 +1,6 @@
 import numpy as np
 import skimage
-from skimage import io, transform, segmentation, morphology
+from skimage import io, transform, segmentation, morphology, color
 import pathlib
 import matplotlib.pyplot as plt
 
@@ -89,15 +89,32 @@ def process_img(img):
     # returns thumbnail, and full resolution img with alpha channels
     return img
 
+def im_loader(file, img_num):
+    img = io.imread(file)
+    s = img.shape
+
+    if len(s) == 2: #greyscale
+        img = color.gray2rgb(img)
+
+    if s[2] == 4: #remove alpha channel (this allows me to continually refine runs)
+        img = img[:,:,0:3]
+
+    return img
+
+
 def process_dir(input_path, output_path):
     # creates an image collection from input_path and saves results to output_path
+    ic = io.ImageCollection(input_path, load_func=im_loader)
 
     #then process each img
-    pass
+    for i in range(len(ic)):
+        img = process_img(ic[i])
+        fname = pathlib.Path(ic.files[i])
+        io.imsave(output_path.joinpath(fname.stem + '.png'), img)
 
 
 if __name__ == "__main__":
-    img = io.imread(pathlib.Path('/home/dlfelps/PycharmProjects/happywhale/tail.jpg'))
-    img = process_img(img)
-    io.imsave('just_tail.png', img)
+    input_pattern = '/home/dlfelps/PycharmProjects/happywhale/fail/*.jpg'
+    output_path = pathlib.Path('/home/dlfelps/PycharmProjects/happywhale/output/')
+    process_dir(input_pattern, output_path)
 
