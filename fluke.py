@@ -5,6 +5,7 @@ import pathlib
 import matplotlib.pyplot as plt
 
 
+
 def raw_moment(i,j, mask):
     height, width = mask.shape
 
@@ -54,8 +55,14 @@ def predict_tail(labels):
 
     return skimage.img_as_ubyte(tail)
 
+def predict_tail2(labels):
+    # more sophisticated
+    global pipe
+
+
 
 def process_img(img):
+
 
     s = img.shape
 
@@ -72,7 +79,7 @@ def process_img(img):
     labels = segmentation.slic(thumb, compactness=.1, n_segments=2)
 
     # predict tail segment
-    tail_mask = predict_tail(labels)
+    tail_mask = predict_tail2(labels)
 
     # upsample mask
     tail_mask_big = transform.resize(255*tail_mask, output_shape=(s[0], s[1]), order=0, mode='edge')#refine sizing
@@ -95,9 +102,9 @@ def im_loader(file, img_num):
 
     if len(s) == 2: #greyscale
         img = color.gray2rgb(img)
-
-    if s[2] == 4: #remove alpha channel (this allows me to continually refine runs)
-        img = img[:,:,0:3]
+    elif len(s) == 3:
+        if s[2] == 4: #remove alpha channel (this allows me to continually refine runs)
+            img = img[:,:,0:3]
 
     return img
 
@@ -110,11 +117,69 @@ def process_dir(input_path, output_path):
     for i in range(len(ic)):
         img = process_img(ic[i])
         fname = pathlib.Path(ic.files[i])
+        print('Saving {}.png'.format(fname.stem))
         io.imsave(output_path.joinpath(fname.stem + '.png'), img)
 
+def main():
+    input_pattern = 'C:/Users/felpsdl/PycharmProjects/happywhale/working/*.png'
+    output_path = pathlib.Path('C:/Users/felpsdl/PycharmProjects/happywhale/working2/')
+    process_dir(input_pattern, output_path)
+
+def analyze_tail_moment(folder):
+    from sklearn import preprocessing, pipeline, svm, metrics, linear_model
+
+    #assume this folder contains human vetted images
+    #will use the alpha channel to calculate the moment for tail/background segments
+
+    # X_train, X_test, y_train, y_test = build_moment_dataset(folder)
+    # np.savez('tail_xy.npz', X_train=X_train, X_test=X_test, y_train=y_train, y_test=y_test)
+    tail_xy = np.load('tail_xy.npz')
+    X_train = tail_xy['X_train']
+    X_test = tail_xy['X_test']
+    y_train = tail_xy['y_train']
+    y_test =  tail_xy['y_test']
+
+    # train a classifier
+    pipe = pipeline.make_pipeline(preprocessing.StandardScaler(), linear_model.LogisticRegression())
+    pipe.fit(X_train, y_train)
+    y_pred = pipe.predict(X_test)
+    print("Prediction accuracy - {}".format(metrics.accuracy_score(y_test, y_pred)))
+    return pipe
+
+'''GLOBAL VARIABLE WARNING'''
+pipe = analyze_tail_moment('')
+
+def build_moment_dataset(folder):
+
+    from sklearn import model_selection
+
+    def just_alpha(file, img_num):
+        img = io.imread(file)
+        img = np.squeeze(img[:,:,3])
+        img = np.bool_(img)
+        return img
+
+    ic = io.ImageCollection(folder, load_func=just_alpha)
+
+    X_pos = np.zeros(shape=(len(ic), 9), dtype='float')
+    y_pos = np.ones(shape=(len(ic)), dtype='int')
+    X_neg = np.zeros_like(X_pos)
+    y_neg = np.zeros_like(y_pos)
+
+    for i in range(len(ic)):
+        #calculate the positive and negative moments
+        alpha = ic[i]
+        X_pos[i,:] = gen_features(alpha)
+        X_neg[i, :] = gen_features(np.logical_not(alpha))
+
+    X = np.concatenate((X_neg, X_pos))
+    y = np.concatenate((y_neg, y_pos))
+
+    X_train, X_test, y_train, y_test = model_selection.train_test_split(X, y, train_size=.5, shuffle=True, stratify=y)
+
+    return X_train, X_test, y_train, y_test
 
 if __name__ == "__main__":
-    input_pattern = '/home/dlfelps/PycharmProjects/happywhale/fail/*.jpg'
-    output_path = pathlib.Path('/home/dlfelps/PycharmProjects/happywhale/output/')
-    process_dir(input_pattern, output_path)
+    folder = 'C:/Users/felpsdl/PycharmProjects/happywhale/final/*.png'
+    analyze_tail_moment(folder)
 

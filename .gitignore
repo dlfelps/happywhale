@@ -5,7 +5,8 @@
 !.gitignore
 !test_manual.py
 !tail.jpg
-!tail.npy
 !tail_demo.ipynb
 !fluke.py
+!tail_xy.npz
+
 
